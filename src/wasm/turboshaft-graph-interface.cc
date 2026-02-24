@@ -2467,9 +2467,84 @@ class TurboshaftGraphBuildingInterface
         break;
       }
       case WKI::kArrayNew:
-      case WKI::kArrayAt:
+        // Array allocation is complex, fall through to Torque builtin.
+        return false;
+      case WKI::kArrayAt: {
+        // Optimized: Load element at index with negative index support.
+        // Fast path for PACKED_SMI_ELEMENTS and PACKED_ELEMENTS.
+        // Slow path calls Runtime::kGetProperty for HOLEY/DOUBLE/other.
+        V<Object> input = args[0].op;
+        V<Word32> idx = args[1].op;
+
+        // Trap if not a HeapObject.
+        if (__ generating_unreachable_operations()) break;
+        __ TrapIf(__ IsSmi(input), TrapId::kTrapIllegalCast);
+
+        // Check instance type.
+        V<Map> map = __ LoadMapField(input);
+        V<Word32> instance_type = __ LoadInstanceTypeField(map);
+        __ TrapIfNot(__ Word32Equal(instance_type, InstanceType::JS_ARRAY_TYPE),
+                     TrapId::kTrapIllegalCast);
+
+        V<JSArray> array = V<JSArray>::Cast(input);
+
+        // Load length (as Smi).
+        V<Object> length_obj = __ template LoadField<Object>(
+            array, compiler::AccessBuilder::ForJSArrayLength(NO_ELEMENTS));
+        V<Word32> length = __ UntagSmi(V<Smi>::Cast(length_obj));
+
+        // Handle negative index: relative_index = index >= 0 ? index : length +
+        // index
+        Label<Word32> have_index(&asm_);
+        GOTO_IF(__ Int32LessThan(idx, __ Word32Constant(0)), have_index,
+                __ Word32Add(length, idx));
+        GOTO(have_index, idx);
+        BIND(have_index, relative_index);
+
+        // Bounds check: if relative_index < 0 || relative_index >= length,
+        // return undefined.
+        Label<Object> done(&asm_);
+        GOTO_IF(__ Int32LessThan(relative_index, __ Word32Constant(0)), done,
+                __ LoadRoot<RootIndex::kUndefinedValue>());
+        GOTO_IF(__ Uint32LessThanOrEqual(length, relative_index), done,
+                __ LoadRoot<RootIndex::kUndefinedValue>());
+
+        // Check elements kind for fast path.
+        V<Word32> elements_kind = __ LoadElementsKind(map);
+
+        // Fast path only for PACKED_SMI_ELEMENTS (0) or PACKED_ELEMENTS (2).
+        // These are the even values <= 2.
+        V<Word32> is_packed = __ Word32BitwiseAnd(
+            __ Uint32LessThanOrEqual(elements_kind,
+                                     __ Word32Constant(PACKED_ELEMENTS)),
+            __ Word32Equal(
+                __ Word32BitwiseAnd(elements_kind, __ Word32Constant(1)),
+                __ Word32Constant(0)));
+
+        IF (is_packed) {
+          // Fast path: direct element access for PACKED arrays.
+          V<FixedArray> elements = __ template LoadField<FixedArray>(
+              array, compiler::AccessBuilder::ForJSObjectElements());
+          V<Object> element = __ LoadFixedArrayElement(
+              elements, __ ChangeInt32ToIntPtr(relative_index));
+          GOTO(done, element);
+        } ELSE {
+          // Slow path: call Runtime::kGetProperty for HOLEY/DOUBLE/other kinds.
+          V<Smi> index_smi = __ TagSmi(relative_index);
+          V<Object> element_slow =
+              __ WasmCallRuntime(decoder->zone(), Runtime::kGetProperty,
+                                 {array, index_smi}, __ NoContextConstant());
+          GOTO(done, element_slow);
+        }
+
+        BIND(done, element_result);
+        result = element_result;
+        decoder->detected_->add_imported_arrays();
+        break;
+      }
       case WKI::kArrayPush:
-        // These fall through to the generic call path (call Torque builtins).
+        // Push is complex (may need to grow backing store, handle element kind
+        // transitions). Fall through to the generic call path.
         return false;
 
         // Math functions.
