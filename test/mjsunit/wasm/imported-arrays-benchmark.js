@@ -15,10 +15,9 @@
 
 d8.file.execute("test/mjsunit/wasm/wasm-module-builder.js");
 
-// Benchmark parameters - adjust these for more accurate measurements.
-const iterations = 10000;
+// Benchmark parameters.
 const elementsPerArray = 100;
-const accessCount = 50;  // Number of at() calls per iteration.
+const accessCount = 50;
 
 // Signatures for js-array builtins.
 let kSig_r_ri = makeSig([kWasmExternRef, kWasmI32], [kWasmExternRef]);
@@ -248,7 +247,7 @@ function buildModule(useBuiltins) {
   return builder;
 }
 
-function runBenchmark(name, fn, warmupIterations = 10) {
+function runBenchmark(name, fn, benchIterations, warmupIterations = 10) {
   // Warmup.
   for (let i = 0; i < warmupIterations; i++) {
     fn();
@@ -256,17 +255,17 @@ function runBenchmark(name, fn, warmupIterations = 10) {
 
   // Measure.
   const start = Date.now();
-  for (let i = 0; i < iterations; i++) {
+  for (let i = 0; i < benchIterations; i++) {
     fn();
   }
   const end = Date.now();
   return end - start;
 }
 
-print("=".repeat(60));
-print("JS Array Builtins Benchmark");
-print("=".repeat(60));
-print(`Iterations: ${iterations}`);
+const title = "JS Array Builtins Benchmark";
+print("=".repeat(title.length));
+print(title);
+print("=".repeat(title.length));
 print("");
 print("Speedup > 1.0x means builtins are faster than JS imports.");
 print("");
@@ -352,97 +351,116 @@ const jsLengthInstance = buildLengthOnlyModule(false).instantiate(jsImports);
 // Run all benchmarks.
 const results = [];
 
+// Iteration counts calibrated so builtins take ~50ms each.
+const iterNew = 130000;           // new: ~50ms
+const iterNewPush1 = 100000;      // new + push (1): ~50ms
+const iterNewPush100 = 80000;     // new + push (100): ~50ms
+const iterFull = 70000;           // new + push + at: ~50ms
+const iterAt = 250000;            // at: ~50ms
+const iterTest = 220000;          // test: ~50ms
+const iterLength = 320000;        // length: ~50ms
+
 results.push({
   name: "new (array allocation)",
+  iterations: iterNew,
   builtin: runBenchmark("builtin-new", () => {
     builtinInstance.exports.new_only(elementsPerArray);
-  }),
+  }, iterNew),
   js: runBenchmark("js-new", () => {
     jsInstance.exports.new_only(elementsPerArray);
-  })
+  }, iterNew)
 });
 
 results.push({
   name: "new + push (1 element)",
+  iterations: iterNewPush1,
   builtin: runBenchmark("builtin-new-push-one", () => {
     builtinInstance.exports.new_push_one(testElement, elementsPerArray);
-  }),
+  }, iterNewPush1),
   js: runBenchmark("js-new-push-one", () => {
     jsInstance.exports.new_push_one(testElement, elementsPerArray);
-  })
+  }, iterNewPush1)
 });
 
 results.push({
   name: "new + push (100 elements)",
+  iterations: iterNewPush100,
   builtin: runBenchmark("builtin-push", () => {
     builtinInstance.exports.push_only(testElement, elementsPerArray);
-  }),
+  }, iterNewPush100),
   js: runBenchmark("js-push", () => {
     jsInstance.exports.push_only(testElement, elementsPerArray);
-  })
+  }, iterNewPush100)
 });
 
 results.push({
   name: "new + push + at",
+  iterations: iterFull,
   builtin: runBenchmark("builtin-full", () => {
     builtinInstance.exports.benchmark(testElement, elementsPerArray, accessCount);
-  }),
+  }, iterFull),
   js: runBenchmark("js-full", () => {
     jsInstance.exports.benchmark(testElement, elementsPerArray, accessCount);
-  })
+  }, iterFull)
 });
 
 results.push({
   name: "at (element access)",
+  iterations: iterAt,
   builtin: runBenchmark("builtin-at", () => {
     builtinInstance.exports.at_only(prePopulatedArray, accessCount);
-  }),
+  }, iterAt),
   js: runBenchmark("js-at", () => {
     jsInstance.exports.at_only(prePopulatedArray, accessCount);
-  })
+  }, iterAt)
 });
 
 results.push({
   name: "test (type checking)",
+  iterations: iterTest,
   builtin: runBenchmark("builtin-test", () => {
     builtinTestInstance.exports.test_loop(prePopulatedArray, accessCount * 10);
-  }),
+  }, iterTest),
   js: runBenchmark("js-test", () => {
     jsTestInstance.exports.test_loop(prePopulatedArray, accessCount * 10);
-  })
+  }, iterTest)
 });
 
 results.push({
   name: "length",
+  iterations: iterLength,
   builtin: runBenchmark("builtin-length", () => {
     builtinLengthInstance.exports.length_loop(prePopulatedArray, accessCount * 10);
-  }),
+  }, iterLength),
   js: runBenchmark("js-length", () => {
     jsLengthInstance.exports.length_loop(prePopulatedArray, accessCount * 10);
-  })
+  }, iterLength)
 });
 
 // Print results table.
-print("=".repeat(70));
-print("Results");
-print("=".repeat(70));
-
 // Find max name length for alignment.
 const maxNameLen = Math.max(...results.map(r => r.name.length));
+const header = `${"Benchmark".padEnd(maxNameLen)}  ${"N".padStart(7)}  Builtins  JS Imports  Speedup`;
+const tableWidth = header.length;
+
+print("=".repeat(tableWidth));
+print("Results");
+print("=".repeat(tableWidth));
 
 // Header.
-print(`${"Benchmark".padEnd(maxNameLen)}  Builtins  JS Imports  Speedup`);
-print("-".repeat(70));
+print(header);
+print("-".repeat(tableWidth));
 
 // Results.
 for (const r of results) {
   const speedup = (r.js / r.builtin).toFixed(2);
-  print(`${r.name.padEnd(maxNameLen)}  ${String(r.builtin).padStart(6)}ms  ${String(r.js).padStart(8)}ms  ${speedup.padStart(6)}x`);
+  const nStr = r.iterations >= 1000 ? `${r.iterations / 1000}k` : String(r.iterations);
+  print(`${r.name.padEnd(maxNameLen)}  ${nStr.padStart(7)}  ${String(r.builtin).padStart(6)}ms  ${String(r.js).padStart(8)}ms  ${speedup.padStart(6)}x`);
 }
 
-print("-".repeat(70));
+print("-".repeat(tableWidth));
 
 // Geometric mean of speedups.
 const speedups = results.map(r => r.js / r.builtin);
 const geometricMean = Math.pow(speedups.reduce((prod, s) => prod * s, 1), 1 / speedups.length);
-print(`${"GEOMETRIC MEAN".padEnd(maxNameLen)}  ${" ".repeat(6)}    ${" ".repeat(8)}    ${geometricMean.toFixed(2).padStart(6)}x`);
+print(`${"GEOMETRIC MEAN".padEnd(maxNameLen)}  ${" ".repeat(7)}  ${" ".repeat(6)}    ${" ".repeat(8)}    ${geometricMean.toFixed(2).padStart(6)}x`);
