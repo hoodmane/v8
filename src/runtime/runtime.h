@@ -773,6 +773,7 @@ constexpr bool CanTriggerGC(T... properties) {
   F(WasmSubstring, 3, 1)                                         \
   F(WasmConfigureAllPrototypes, 4, 1)                            \
   F(WasmConfigureAllPrototypesOpt, 3, 1)                         \
+  F(WasmJSArrayPush, 2, 1)                                       \
   F(DebugCollectWasmCoverage, 0, 1)                              \
   F(WasmTypeAssertionFailed, 0, 1, RuntimeCallProperty::kCannotTriggerGC)
 

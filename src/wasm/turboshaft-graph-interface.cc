@@ -2542,10 +2542,84 @@ class TurboshaftGraphBuildingInterface
         decoder->detected_->add_imported_arrays();
         break;
       }
-      case WKI::kArrayPush:
-        // Push is complex (may need to grow backing store, handle element kind
-        // transitions). Fall through to the generic call path.
-        return false;
+      case WKI::kArrayPush: {
+        // Optimized push: fast path for PACKED_ELEMENTS with room in backing
+        // store. Falls back to runtime for element kind transitions and growth.
+        V<Object> array_arg = args[0].op;
+        V<Object> element_arg = args[1].op;
+
+        // Trap if not a HeapObject.
+        if (__ generating_unreachable_operations()) break;
+        __ TrapIf(__ IsSmi(array_arg), TrapId::kTrapIllegalCast);
+
+        // Check instance type.
+        V<Map> map = __ LoadMapField(array_arg);
+        V<Word32> instance_type = __ LoadInstanceTypeField(map);
+        __ TrapIfNot(__ Word32Equal(instance_type, InstanceType::JS_ARRAY_TYPE),
+                     TrapId::kTrapIllegalCast);
+
+        V<JSArray> array = V<JSArray>::Cast(array_arg);
+
+        // Load current length (as Smi).
+        V<Object> length_obj = __ template LoadField<Object>(
+            array, compiler::AccessBuilder::ForJSArrayLength(PACKED_ELEMENTS));
+        V<Word32> length = __ UntagSmi(V<Smi>::Cast(length_obj));
+
+        // Check elements kind - fast path only for PACKED_ELEMENTS.
+        V<Word32> elements_kind = __ LoadElementsKind(map);
+        V<Word32> is_packed_elements =
+            __ Word32Equal(elements_kind, __ Word32Constant(PACKED_ELEMENTS));
+
+        Label<Word32> done(&asm_);
+        V<Context> native_context = instance_cache_.native_context();
+
+        IF (is_packed_elements) {
+          // Load elements backing store.
+          V<FixedArray> elements = __ template LoadField<FixedArray>(
+              array, compiler::AccessBuilder::ForJSObjectElements());
+
+          // Load backing store capacity.
+          V<Object> capacity_obj = __ template LoadField<Object>(
+              elements, compiler::AccessBuilder::ForFixedArrayLength());
+          V<Word32> capacity = __ UntagSmi(V<Smi>::Cast(capacity_obj));
+
+          // Check if there's room in the backing store.
+          V<Word32> has_room = __ Uint32LessThan(length, capacity);
+
+          IF (has_room) {
+            // Fast path: store element and update length.
+            __ StoreFixedArrayElement(elements, __ ChangeInt32ToIntPtr(length),
+                                      element_arg,
+                                      WriteBarrierKind::kFullWriteBarrier);
+
+            V<Word32> new_length = __ Word32Add(length, __ Word32Constant(1));
+            V<Smi> new_length_smi = __ TagSmi(new_length);
+            __ StoreField(
+                array,
+                compiler::AccessBuilder::ForJSArrayLength(PACKED_ELEMENTS),
+                new_length_smi);
+
+            GOTO(done, new_length);
+          } ELSE {
+            // Need to grow: call runtime.
+            V<Object> runtime_result =
+                __ WasmCallRuntime(decoder->zone(), Runtime::kWasmJSArrayPush,
+                                   {array_arg, element_arg}, native_context);
+            GOTO(done, __ UntagSmi(V<Smi>::Cast(runtime_result)));
+          }
+        } ELSE {
+          // Not PACKED_ELEMENTS: call runtime for element kind transitions.
+          V<Object> runtime_result =
+              __ WasmCallRuntime(decoder->zone(), Runtime::kWasmJSArrayPush,
+                                 {array_arg, element_arg}, native_context);
+          GOTO(done, __ UntagSmi(V<Smi>::Cast(runtime_result)));
+        }
+
+        BIND(done, final_result);
+        result = final_result;
+        decoder->detected_->add_imported_arrays();
+        break;
+      }
 
         // Math functions.
       case WKI::kMathF64Acos:

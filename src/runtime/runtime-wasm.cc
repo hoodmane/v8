@@ -2866,6 +2866,26 @@ RUNTIME_FUNCTION(Runtime_WasmTypeAssertionFailed) {
   // security issues in ClusterFuzz.
   FATAL("[FuzzerSecurityIssueHigh] Wasm type assertion violation");
 }
+
+RUNTIME_FUNCTION(Runtime_WasmJSArrayPush) {
+  HandleScope scope(isolate);
+  DCHECK_EQ(2, args.length());
+  DirectHandle<JSArray> array(Cast<JSArray>(args[0]), isolate);
+  DirectHandle<Object> element(args[1], isolate);
+
+  // Get the current length.
+  uint32_t length = static_cast<uint32_t>(Object::NumberValue(array->length()));
+
+  // Use Object::SetElement which handles element kind transitions properly.
+  // Cast to JSAny as required by SetElement signature.
+  DirectHandle<JSAny> receiver = Cast<JSAny>(array);
+  MaybeDirectHandle<Object> result = Object::SetElement(
+      isolate, receiver, length, element, ShouldThrow::kDontThrow);
+  USE(result);
+
+  // Return the new length (always return Smi for Wasm compatibility).
+  return Smi::FromInt(length + 1);
+}
 #undef RuntimeArguments
 
 }  // namespace v8::internal
