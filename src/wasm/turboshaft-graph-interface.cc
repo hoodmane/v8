@@ -2466,9 +2466,47 @@ class TurboshaftGraphBuildingInterface
         decoder->detected_->add_imported_arrays();
         break;
       }
-      case WKI::kArrayNew:
-        // Array allocation is complex, fall through to Torque builtin.
-        return false;
+      case WKI::kArrayNew: {
+        // Inline allocation of empty JSArray with pre-allocated backing store.
+        // Use PACKED_ELEMENTS since wasm:js-array typically pushes objects
+        // (externref), not just Smis. Pre-allocate capacity to avoid
+        // backing store growth on first few pushes.
+        if (__ generating_unreachable_operations()) break;
+
+        constexpr int kInitialCapacity = 4;
+
+        // Load the map for PACKED_ELEMENTS from native context.
+        V<NativeContext> native_context = instance_cache_.native_context();
+        V<Map> array_map = __ template LoadField<Map>(
+            native_context, compiler::AccessBuilder::ForContextSlot(
+                                Context::JS_ARRAY_PACKED_ELEMENTS_MAP_INDEX));
+
+        // Allocate backing store with initial capacity.
+        V<FixedArray> elements = CallBuiltinThroughJumptable<
+            BuiltinCallDescriptor::WasmAllocateFixedArray>(
+            decoder, {__ IntPtrConstant(kInitialCapacity)});
+
+        // Allocate the JSArray object.
+        auto array = __ template Allocate<JSArray>(
+            __ IntPtrConstant(
+                ALIGN_TO_ALLOCATION_ALIGNMENT(JSArray::kHeaderSize)),
+            AllocationType::kYoung, AllocationAlignment::kTaggedAligned);
+
+        // Initialize the JSArray fields.
+        __ InitializeField(array, compiler::AccessBuilder::ForMap(), array_map);
+        __ InitializeField(
+            array, compiler::AccessBuilder::ForJSObjectPropertiesOrHash(),
+            __ LoadRoot<RootIndex::kEmptyFixedArray>());
+        __ InitializeField(
+            array, compiler::AccessBuilder::ForJSObjectElements(), elements);
+        __ InitializeField(
+            array, compiler::AccessBuilder::ForJSArrayLength(PACKED_ELEMENTS),
+            __ TagSmi(__ Word32Constant(0)));
+
+        result = __ FinishInitialization(std::move(array));
+        decoder->detected_->add_imported_arrays();
+        break;
+      }
       case WKI::kArrayAt: {
         // Optimized: Load element at index with negative index support.
         // Fast path for PACKED_SMI_ELEMENTS and PACKED_ELEMENTS.
