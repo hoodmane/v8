@@ -267,11 +267,8 @@ print("=".repeat(60));
 print("JS Array Builtins Benchmark");
 print("=".repeat(60));
 print(`Iterations: ${iterations}`);
-print(`Elements per array: ${elementsPerArray}`);
-print(`Access count: ${accessCount}`);
 print("");
-print("NOTE: All operations have TurboShaft optimizations.");
-print("      Speedup > 1.0x means builtins are faster than JS imports.");
+print("Speedup > 1.0x means builtins are faster than JS imports.");
 print("");
 
 // Build both versions.
@@ -445,8 +442,7 @@ for (const r of results) {
 
 print("-".repeat(70));
 
-// Total.
-const totalBuiltin = results.reduce((sum, r) => sum + r.builtin, 0);
-const totalJs = results.reduce((sum, r) => sum + r.js, 0);
-const totalSpeedup = (totalJs / totalBuiltin).toFixed(2);
-print(`${"TOTAL".padEnd(maxNameLen)}  ${String(totalBuiltin).padStart(6)}ms  ${String(totalJs).padStart(8)}ms  ${totalSpeedup.padStart(6)}x`);
+// Geometric mean of speedups.
+const speedups = results.map(r => r.js / r.builtin);
+const geometricMean = Math.pow(speedups.reduce((prod, s) => prod * s, 1), 1 / speedups.length);
+print(`${"GEOMETRIC MEAN".padEnd(maxNameLen)}  ${" ".repeat(6)}    ${" ".repeat(8)}    ${geometricMean.toFixed(2).padStart(6)}x`);
