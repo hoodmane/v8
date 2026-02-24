@@ -283,68 +283,10 @@ const jsInstance = jsBuilder.instantiate(jsImports);
 
 const testElement = "test-element";
 
-// Benchmark 1: Full benchmark (new + push + at).
-print("-".repeat(60));
-print("Benchmark 1: Full workflow (new + push + at)");
-print("-".repeat(60));
-
-const builtinFullTime = runBenchmark("builtin-full", () => {
-  builtinInstance.exports.benchmark(testElement, elementsPerArray, accessCount);
-});
-
-const jsFullTime = runBenchmark("js-full", () => {
-  jsInstance.exports.benchmark(testElement, elementsPerArray, accessCount);
-});
-
-print(`  Builtins:   ${builtinFullTime} ms`);
-print(`  JS imports: ${jsFullTime} ms`);
-print(`  Speedup:    ${(jsFullTime / builtinFullTime).toFixed(2)}x`);
-print("");
-
-// Benchmark 2: Push only.
-print("-".repeat(60));
-print("Benchmark 2: Push only (new + push)");
-print("-".repeat(60));
-
-const builtinPushTime = runBenchmark("builtin-push", () => {
-  builtinInstance.exports.push_only(testElement, elementsPerArray);
-});
-
-const jsPushTime = runBenchmark("js-push", () => {
-  jsInstance.exports.push_only(testElement, elementsPerArray);
-});
-
-print(`  Builtins:   ${builtinPushTime} ms`);
-print(`  JS imports: ${jsPushTime} ms`);
-print(`  Speedup:    ${(jsPushTime / builtinPushTime).toFixed(2)}x`);
-print("");
-
-// Benchmark 3: At only.
-print("-".repeat(60));
-print("Benchmark 3: At only (accessing pre-existing array)");
-print("-".repeat(60));
-
-// Create a pre-populated array for the at-only benchmark.
+// Create a pre-populated array for at/test/length benchmarks.
 const prePopulatedArray = Array.from({length: elementsPerArray}, (_, i) => `elem-${i}`);
 
-const builtinAtTime = runBenchmark("builtin-at", () => {
-  builtinInstance.exports.at_only(prePopulatedArray, accessCount);
-});
-
-const jsAtTime = runBenchmark("js-at", () => {
-  jsInstance.exports.at_only(prePopulatedArray, accessCount);
-});
-
-print(`  Builtins:   ${builtinAtTime} ms`);
-print(`  JS imports: ${jsAtTime} ms`);
-print(`  Speedup:    ${(jsAtTime / builtinAtTime).toFixed(2)}x`);
-print("");
-
-// Benchmark 4: Test only (type checking).
-print("-".repeat(60));
-print("Benchmark 4: Test only (type checking) - OPTIMIZED");
-print("-".repeat(60));
-
+// Build test-only and length-only modules.
 function buildTestOnlyModule(useBuiltins) {
   let builder = new WasmModuleBuilder();
   const moduleName = useBuiltins ? 'wasm:js-array' : 'js-array';
@@ -353,7 +295,7 @@ function buildTestOnlyModule(useBuiltins) {
   builder.addFunction("test_loop",
       makeSig([kWasmExternRef, kWasmI32], [kWasmI32]))
     .exportFunc()
-    .addLocals(kWasmI32, 2)  // counter, accumulator
+    .addLocals(kWasmI32, 2)
     .addBody([
       kExprLoop, kWasmVoid,
         kExprLocalGet, 0,
@@ -375,29 +317,6 @@ function buildTestOnlyModule(useBuiltins) {
   return builder;
 }
 
-const builtinTestBuilder = buildTestOnlyModule(true);
-const jsTestBuilder = buildTestOnlyModule(false);
-const builtinTestInstance = builtinTestBuilder.instantiate({}, { builtins: ["js-array"] });
-const jsTestInstance = jsTestBuilder.instantiate(jsImports);
-
-const builtinTestTime = runBenchmark("builtin-test", () => {
-  builtinTestInstance.exports.test_loop(prePopulatedArray, accessCount * 10);
-});
-
-const jsTestTime = runBenchmark("js-test", () => {
-  jsTestInstance.exports.test_loop(prePopulatedArray, accessCount * 10);
-});
-
-print(`  Builtins:   ${builtinTestTime} ms`);
-print(`  JS imports: ${jsTestTime} ms`);
-print(`  Speedup:    ${(jsTestTime / builtinTestTime).toFixed(2)}x`);
-print("");
-
-// Benchmark 5: Length only.
-print("-".repeat(60));
-print("Benchmark 5: Length only - OPTIMIZED");
-print("-".repeat(60));
-
 function buildLengthOnlyModule(useBuiltins) {
   let builder = new WasmModuleBuilder();
   const moduleName = useBuiltins ? 'wasm:js-array' : 'js-array';
@@ -406,7 +325,7 @@ function buildLengthOnlyModule(useBuiltins) {
   builder.addFunction("length_loop",
       makeSig([kWasmExternRef, kWasmI32], [kWasmI32]))
     .exportFunc()
-    .addLocals(kWasmI32, 2)  // counter, accumulator
+    .addLocals(kWasmI32, 2)
     .addBody([
       kExprLoop, kWasmVoid,
         kExprLocalGet, 0,
@@ -428,68 +347,106 @@ function buildLengthOnlyModule(useBuiltins) {
   return builder;
 }
 
-const builtinLengthBuilder = buildLengthOnlyModule(true);
-const jsLengthBuilder = buildLengthOnlyModule(false);
-const builtinLengthInstance = builtinLengthBuilder.instantiate({}, { builtins: ["js-array"] });
-const jsLengthInstance = jsLengthBuilder.instantiate(jsImports);
+const builtinTestInstance = buildTestOnlyModule(true).instantiate({}, { builtins: ["js-array"] });
+const jsTestInstance = buildTestOnlyModule(false).instantiate(jsImports);
+const builtinLengthInstance = buildLengthOnlyModule(true).instantiate({}, { builtins: ["js-array"] });
+const jsLengthInstance = buildLengthOnlyModule(false).instantiate(jsImports);
 
-const builtinLengthTime = runBenchmark("builtin-length", () => {
-  builtinLengthInstance.exports.length_loop(prePopulatedArray, accessCount * 10);
+// Run all benchmarks.
+const results = [];
+
+results.push({
+  name: "new (array allocation)",
+  builtin: runBenchmark("builtin-new", () => {
+    builtinInstance.exports.new_only(elementsPerArray);
+  }),
+  js: runBenchmark("js-new", () => {
+    jsInstance.exports.new_only(elementsPerArray);
+  })
 });
 
-const jsLengthTime = runBenchmark("js-length", () => {
-  jsLengthInstance.exports.length_loop(prePopulatedArray, accessCount * 10);
+results.push({
+  name: "new + push (1 element)",
+  builtin: runBenchmark("builtin-new-push-one", () => {
+    builtinInstance.exports.new_push_one(testElement, elementsPerArray);
+  }),
+  js: runBenchmark("js-new-push-one", () => {
+    jsInstance.exports.new_push_one(testElement, elementsPerArray);
+  })
 });
 
-print(`  Builtins:   ${builtinLengthTime} ms`);
-print(`  JS imports: ${jsLengthTime} ms`);
-print(`  Speedup:    ${(jsLengthTime / builtinLengthTime).toFixed(2)}x`);
-print("");
-
-// Benchmark 6: New only (array allocation).
-print("-".repeat(60));
-print("Benchmark 6: New only (array allocation)");
-print("-".repeat(60));
-
-const builtinNewTime = runBenchmark("builtin-new", () => {
-  builtinInstance.exports.new_only(elementsPerArray);
+results.push({
+  name: "new + push (100 elements)",
+  builtin: runBenchmark("builtin-push", () => {
+    builtinInstance.exports.push_only(testElement, elementsPerArray);
+  }),
+  js: runBenchmark("js-push", () => {
+    jsInstance.exports.push_only(testElement, elementsPerArray);
+  })
 });
 
-const jsNewTime = runBenchmark("js-new", () => {
-  jsInstance.exports.new_only(elementsPerArray);
+results.push({
+  name: "new + push + at",
+  builtin: runBenchmark("builtin-full", () => {
+    builtinInstance.exports.benchmark(testElement, elementsPerArray, accessCount);
+  }),
+  js: runBenchmark("js-full", () => {
+    jsInstance.exports.benchmark(testElement, elementsPerArray, accessCount);
+  })
 });
 
-print(`  Builtins:   ${builtinNewTime} ms`);
-print(`  JS imports: ${jsNewTime} ms`);
-print(`  Speedup:    ${(jsNewTime / builtinNewTime).toFixed(2)}x`);
-print("");
-
-// Benchmark 7: New + single push.
-print("-".repeat(60));
-print("Benchmark 7: New + single push");
-print("-".repeat(60));
-
-const builtinNewPushOneTime = runBenchmark("builtin-new-push-one", () => {
-  builtinInstance.exports.new_push_one(testElement, elementsPerArray);
+results.push({
+  name: "at (element access)",
+  builtin: runBenchmark("builtin-at", () => {
+    builtinInstance.exports.at_only(prePopulatedArray, accessCount);
+  }),
+  js: runBenchmark("js-at", () => {
+    jsInstance.exports.at_only(prePopulatedArray, accessCount);
+  })
 });
 
-const jsNewPushOneTime = runBenchmark("js-new-push-one", () => {
-  jsInstance.exports.new_push_one(testElement, elementsPerArray);
+results.push({
+  name: "test (type checking)",
+  builtin: runBenchmark("builtin-test", () => {
+    builtinTestInstance.exports.test_loop(prePopulatedArray, accessCount * 10);
+  }),
+  js: runBenchmark("js-test", () => {
+    jsTestInstance.exports.test_loop(prePopulatedArray, accessCount * 10);
+  })
 });
 
-print(`  Builtins:   ${builtinNewPushOneTime} ms`);
-print(`  JS imports: ${jsNewPushOneTime} ms`);
-print(`  Speedup:    ${(jsNewPushOneTime / builtinNewPushOneTime).toFixed(2)}x`);
-print("");
+results.push({
+  name: "length",
+  builtin: runBenchmark("builtin-length", () => {
+    builtinLengthInstance.exports.length_loop(prePopulatedArray, accessCount * 10);
+  }),
+  js: runBenchmark("js-length", () => {
+    jsLengthInstance.exports.length_loop(prePopulatedArray, accessCount * 10);
+  })
+});
 
-// Summary.
-print("=".repeat(60));
-print("Summary");
-print("=".repeat(60));
-const totalBuiltin = builtinFullTime + builtinPushTime + builtinAtTime + builtinNewTime + builtinNewPushOneTime;
-const totalJs = jsFullTime + jsPushTime + jsAtTime + jsNewTime + jsNewPushOneTime;
-print(`  Total (all ops):   builtins=${totalBuiltin}ms, JS=${totalJs}ms, speedup=${(totalJs / totalBuiltin).toFixed(2)}x`);
-print(`  New only:          builtins=${builtinNewTime}ms, JS=${jsNewTime}ms, speedup=${(jsNewTime / builtinNewTime).toFixed(2)}x`);
-print(`  New + push one:    builtins=${builtinNewPushOneTime}ms, JS=${jsNewPushOneTime}ms, speedup=${(jsNewPushOneTime / builtinNewPushOneTime).toFixed(2)}x`);
-print(`  Test (optimized):  builtins=${builtinTestTime}ms, JS=${jsTestTime}ms, speedup=${(jsTestTime / builtinTestTime).toFixed(2)}x`);
-print(`  Length (optimized): builtins=${builtinLengthTime}ms, JS=${jsLengthTime}ms, speedup=${(jsLengthTime / builtinLengthTime).toFixed(2)}x`);
+// Print results table.
+print("=".repeat(70));
+print("Results");
+print("=".repeat(70));
+
+// Find max name length for alignment.
+const maxNameLen = Math.max(...results.map(r => r.name.length));
+
+// Header.
+print(`${"Benchmark".padEnd(maxNameLen)}  Builtins  JS Imports  Speedup`);
+print("-".repeat(70));
+
+// Results.
+for (const r of results) {
+  const speedup = (r.js / r.builtin).toFixed(2);
+  print(`${r.name.padEnd(maxNameLen)}  ${String(r.builtin).padStart(6)}ms  ${String(r.js).padStart(8)}ms  ${speedup.padStart(6)}x`);
+}
+
+print("-".repeat(70));
+
+// Total.
+const totalBuiltin = results.reduce((sum, r) => sum + r.builtin, 0);
+const totalJs = results.reduce((sum, r) => sum + r.js, 0);
+const totalSpeedup = (totalJs / totalBuiltin).toFixed(2);
+print(`${"TOTAL".padEnd(maxNameLen)}  ${String(totalBuiltin).padStart(6)}ms  ${String(totalJs).padStart(8)}ms  ${totalSpeedup.padStart(6)}x`);
