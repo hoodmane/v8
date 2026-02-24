@@ -3997,6 +3997,10 @@ CompileTimeImports WasmJs::CompileTimeImportsFromArgument(
           result.Add(CompileTimeImport::kJsString);
           continue;
         }
+        if (builtin->IsEqualTo(base::CStrVector("js-array"))) {
+          result.Add(CompileTimeImport::kJsArray);
+          continue;
+        }
         if (enabled_features.has_imported_strings_utf8()) {
           if (builtin->IsEqualTo(base::CStrVector("text-encoder"))) {
             result.Add(CompileTimeImport::kTextEncoder);

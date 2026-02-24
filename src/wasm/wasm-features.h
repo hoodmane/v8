@@ -28,6 +28,7 @@
   V(relaxed_simd)                        \
   V(gc)                                  \
   V(imported_strings)                    \
+  V(imported_arrays)                     \
   V(typed_funcref)                       \
   V(multi_memory)                        \
   V(multi_value)                         \
@@ -142,6 +143,7 @@ inline std::ostream& operator<<(std::ostream& os, WasmDetectedFeature feature) {
 
 enum class CompileTimeImport {
   kJsString,
+  kJsArray,
   kStringConstants,
   kTextEncoder,
   kTextDecoder,

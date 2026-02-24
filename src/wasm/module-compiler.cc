@@ -1677,6 +1677,7 @@ void PublishDetectedFeatures(WasmDetectedFeatures detected_features,
       {WasmDetectedFeature::custom_descriptors,
        Feature::kWasmCustomDescriptors},
       {WasmDetectedFeature::rab_integration, Feature::kWasmResizableBuffers},
+      {WasmDetectedFeature::imported_arrays, Feature::kWasmImportedArrays},
   };
 
   // Check that every staging or shipping feature has a use counter as that is
@@ -1859,6 +1860,14 @@ WasmError ValidateAndSetBuiltinImports(const WasmModule* module,
                  imports.contains(CompileTimeImport::kTextDecoder)) {
         CHECK_SIG(decodeStringFromUTF8Array, e_a8ii, kStringFromUtf8Array,
                   imported_strings_utf8)
+
+      } else if (collection == base::StaticOneByteVector("js-array") &&
+                 imports.contains(CompileTimeImport::kJsArray)) {
+        CHECK_SIG(new, r_v, kArrayNew, imported_arrays)
+        CHECK_SIG(test, i_r, kArrayTest, imported_arrays)
+        CHECK_SIG(length, i_r, kArrayLength, imported_arrays)
+        CHECK_SIG(at, r_ri, kArrayAt, imported_arrays)
+        CHECK_SIG(push, i_rr, kArrayPush, imported_arrays)
 
       } else if (collection == base::StaticOneByteVector("js-prototypes") &&
                  imports.contains(CompileTimeImport::kJsPrototypes)) {

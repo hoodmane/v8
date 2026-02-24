@@ -48,6 +48,13 @@ enum class WellKnownImport : uint8_t {
   kStringToUtf8Array,
   kStringToWtf16Array,
 
+  // JS Array Builtins
+  kArrayNew,
+  kArrayTest,
+  kArrayLength,
+  kArrayAt,
+  kArrayPush,
+
   // JS Prototypes setup (Custom Descriptors proposal)
   kConfigureAllPrototypes,
 

@@ -291,6 +291,10 @@ void TypeCanonicalizer::AddPredefinedTypes() {
                                                         kI32};
   static constexpr CanonicalValueType kReps_configureAll[] = {kAE, kAF, kA8,
                                                               kExternRef};
+  // Signatures for js-array builtins:
+  static constexpr CanonicalValueType kReps_r_v[] = {kExternRef};
+  static constexpr CanonicalValueType kReps_r_ri[] = {kExternRef, kExternRef,
+                                                      kI32};
 
   static constexpr std::tuple<CanonicalTypeIndex, size_t /* return count */,
                               size_t /* parameter count */,
@@ -308,7 +312,9 @@ void TypeCanonicalizer::AddPredefinedTypes() {
           {kPredefinedSigIndex_i_ra8i, 1, 3, kReps_i_ra8i},
           {kPredefinedSigIndex_n8_r, 1, 1, kReps_n8_r},
           {kPredefinedSigIndex_e_a8ii, 1, 3, kReps_e_a8ii},
-          {kPredefinedSigIndex_configureAll, 0, 4, kReps_configureAll}};
+          {kPredefinedSigIndex_configureAll, 0, 4, kReps_configureAll},
+          {kPredefinedSigIndex_r_v, 1, 0, kReps_r_v},
+          {kPredefinedSigIndex_r_ri, 1, 2, kReps_r_ri}};
   for (auto [index, return_count, parameter_count, reps] : kPredefinedSigs) {
     DCHECK_GT(kNumberOfPredefinedTypes, index.index);
     DCHECK_EQ(index.index, canonical_singleton_groups_.size());

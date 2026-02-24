@@ -136,6 +136,18 @@ const char* WellKnownImportName(WellKnownImport wki) {
     case WellKnownImport::kStringToWtf16Array:
       return "js-string:intoCharCodeArray";
 
+      // JS Array Builtins:
+    case WellKnownImport::kArrayNew:
+      return "js-array:new";
+    case WellKnownImport::kArrayTest:
+      return "js-array:test";
+    case WellKnownImport::kArrayLength:
+      return "js-array:length";
+    case WellKnownImport::kArrayAt:
+      return "js-array:at";
+    case WellKnownImport::kArrayPush:
+      return "js-array:push";
+
       // Custom Descriptors
     case WellKnownImport::kConfigureAllPrototypes:
       return "js-prototypes:configureAll";

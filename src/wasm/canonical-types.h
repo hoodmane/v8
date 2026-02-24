@@ -67,8 +67,12 @@ class TypeCanonicalizer {
   static constexpr CanonicalTypeIndex kPredefinedSigIndex_n8_r{14};
   static constexpr CanonicalTypeIndex kPredefinedSigIndex_e_a8ii{15};
   static constexpr CanonicalTypeIndex kPredefinedSigIndex_configureAll{16};
+  // Signatures for js-array builtins:
+  // "r_v" = () -> externref, "r_ri" = (externref, i32) -> externref
+  static constexpr CanonicalTypeIndex kPredefinedSigIndex_r_v{17};
+  static constexpr CanonicalTypeIndex kPredefinedSigIndex_r_ri{18};
 
-  static constexpr uint32_t kNumberOfPredefinedTypes = 17;
+  static constexpr uint32_t kNumberOfPredefinedTypes = 19;
 
   TypeCanonicalizer();
 

@@ -2299,6 +2299,7 @@ if (v8_enable_webassembly) {
     "src/builtins/js-to-js.tq",
     "src/builtins/js-to-wasm.tq",
     "src/builtins/wasm.tq",
+    "src/builtins/wasm-arrays.tq",
     "src/builtins/wasm-strings.tq",
     "src/builtins/wasm-to-js.tq",
     "src/debug/debug-wasm-objects.tq",

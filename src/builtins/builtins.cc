@@ -755,6 +755,11 @@ Builtins::JSBuiltinStateFlags Builtins::GetJSBuiltinState(Builtin builtin) {
     case Builtin::kWebAssemblyStringEquals:
     case Builtin::kWebAssemblyStringCompare:
     case Builtin::kWebAssemblyConfigureAllPrototypes:
+    case Builtin::kWebAssemblyArrayNew:
+    case Builtin::kWebAssemblyArrayTest:
+    case Builtin::kWebAssemblyArrayLength:
+    case Builtin::kWebAssemblyArrayAt:
+    case Builtin::kWebAssemblyArrayPush:
       return JSBuiltinStateFlag::kCoreJSLazy;
 #endif  // V8_ENABLE_WEBASSEMBLY
 

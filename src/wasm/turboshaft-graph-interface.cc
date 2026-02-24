@@ -816,7 +816,7 @@ class TurboshaftGraphBuildingInterface
             __ output_graph().Replace<compiler::turboshaft::PhiOp>(
                 replaced,
                 base::VectorOf(
-                    {pending_phi.first(), (*block->br_merge())[i].op}),
+                    {pending_phi.first(), (*block -> br_merge())[i].op}),
                 pending_phi.rep);
           }
         }
@@ -2424,6 +2424,16 @@ class TurboshaftGraphBuildingInterface
         break;
       }
 
+        // JS Array Builtins.
+        // For now, these fall through to the generic call path (return false).
+        // TODO: Add optimized implementations for js-array builtins.
+      case WKI::kArrayNew:
+      case WKI::kArrayTest:
+      case WKI::kArrayLength:
+      case WKI::kArrayAt:
+      case WKI::kArrayPush:
+        return false;
+
         // Math functions.
       case WKI::kMathF64Acos:
         result = __ Float64Acos(args[0].op);
@@ -2663,7 +2673,7 @@ class TurboshaftGraphBuildingInterface
           if (use_deopt_slowpath && is_last_feedback_case) {
             DeoptIfNot(decoder, __ Word32Equal(target, inlined_target),
                        frame_state);
-            } else {
+          } else {
             TSBlock* inline_block = __ NewBlock();
             BranchHint hint =
                 is_last_feedback_case ? BranchHint::kTrue : BranchHint::kNone;
@@ -2725,7 +2735,7 @@ class TurboshaftGraphBuildingInterface
 
         return;
       }  // should_inline
-    }    // v8_flags.wasm_inlining_call_indirect
+    }  // v8_flags.wasm_inlining_call_indirect
 
     // Didn't inline.
     V<WordPtr> index_wordptr = TableAddressToUintPtrOrOOBTrap(
@@ -2847,7 +2857,7 @@ class TurboshaftGraphBuildingInterface
 
         __ Bind(no_inline_block);
       }  // should_inline
-    }    // v8_flags.wasm_inlining_call_indirect
+    }  // v8_flags.wasm_inlining_call_indirect
 
     // Didn't inline.
     V<WordPtr> index_wordptr = TableAddressToUintPtrOrOOBTrap(
@@ -3321,7 +3331,7 @@ class TurboshaftGraphBuildingInterface
         V<compiler::turboshaft::Simd128>::Cast(args[1].op),     \
         compiler::turboshaft::Simd128TernaryOp::Kind::k##kind); \
     break;
-      FOREACH_SIMD_128_TERNARY_MASK_OPCODE(HANDLE_TERNARY_MASK_OPCODE)
+        FOREACH_SIMD_128_TERNARY_MASK_OPCODE(HANDLE_TERNARY_MASK_OPCODE)
 #undef HANDLE_TERNARY_MASK_OPCODE
 
 #define HANDLE_TERNARY_OTHER_OPCODE(kind)                       \
@@ -3332,7 +3342,7 @@ class TurboshaftGraphBuildingInterface
         V<compiler::turboshaft::Simd128>::Cast(args[2].op),     \
         compiler::turboshaft::Simd128TernaryOp::Kind::k##kind); \
     break;
-      FOREACH_SIMD_128_TERNARY_OTHER_OPCODE(HANDLE_TERNARY_OTHER_OPCODE)
+        FOREACH_SIMD_128_TERNARY_OTHER_OPCODE(HANDLE_TERNARY_OTHER_OPCODE)
 #undef HANDLE_TERNARY_OTHER_OPCODE
 
 #define HANDLE_F16X8_TERN_OPCODE(kind, extern_ref)                          \
@@ -6343,7 +6353,7 @@ class TurboshaftGraphBuildingInterface
    public:
     // Ctor for regular blocks.
     V8_INLINE BlockPhis(FullDecoder* decoder, Merge<Value>* merge)
-        : incoming_exceptions_(decoder -> zone()) {
+        : incoming_exceptions_(decoder->zone()) {
       // Allocate space and initialize the types of all phis.
       uint32_t num_locals = decoder->num_locals();
       uint32_t merge_arity = merge != nullptr ? merge->arity : 0;

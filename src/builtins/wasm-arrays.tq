@@ -1,0 +1,106 @@
+// Copyright 2024 the V8 project authors. All rights reserved.
+// Use of this source code is governed by a BSD-style license that can be
+// found in the LICENSE file.
+
+// This file defines the builtins that are used as the non-optimized versions
+// of the "JS Array Builtins", i.e. from Liftoff code, and for exported
+// functions. Analogous to wasm-strings.tq for js-string builtins.
+
+// Note: Uses Trap macro defined in wasm-strings.tq
+
+// Creates a new empty JSArray.
+// Signature: () -> externref
+transitioning javascript builtin WebAssemblyArrayNew(
+    js-implicit context: NativeContext)(): JSAny {
+  return NewJSArray();
+}
+
+// Tests if the argument is a JSArray.
+// Signature: (externref) -> i32
+// Returns 1 if JSArray, 0 otherwise.
+transitioning javascript builtin WebAssemblyArrayTest(
+    js-implicit context: Context)(arg: JSAny): Smi {
+  typeswitch (arg) {
+    case (JSArray): {
+      return SmiConstant(1);
+    }
+    case (JSAny): {
+      return SmiConstant(0);
+    }
+  }
+}
+
+// Returns the length of the JSArray.
+// Signature: (externref) -> i32
+// Traps if the argument is not a JSArray.
+transitioning javascript builtin WebAssemblyArrayLength(
+    js-implicit context: Context)(arg: JSAny): JSAny {
+  try {
+    const array = Cast<JSArray>(arg) otherwise goto IllegalCast;
+    return array.length;
+  } label IllegalCast deferred {
+    Trap(context, MessageTemplate::kWasmTrapIllegalCast);
+  }
+}
+
+// Returns the element at the given index, supporting negative indices.
+// Signature: (externref, i32) -> externref
+// Traps if the first argument is not a JSArray.
+// Returns undefined if the index is out of bounds.
+transitioning javascript builtin WebAssemblyArrayAt(
+    js-implicit context: NativeContext)(arrayArg: JSAny,
+    indexArg: JSAny): JSAny {
+  try {
+    const array = Cast<JSArray>(arrayArg) otherwise goto IllegalCast;
+    const index = ToInteger_Inline(indexArg);
+    const len = array.length;
+
+    // Handle relative index (negative indices like Array.prototype.at)
+    const relativeIndex = index >= 0 ? index : len + index;
+    if (relativeIndex < 0 || relativeIndex >= len) {
+      return Undefined;
+    }
+    return GetProperty(array, relativeIndex);
+  } label IllegalCast deferred {
+    Trap(context, MessageTemplate::kWasmTrapIllegalCast);
+  }
+}
+
+// Pushes an element to the array and returns the new length.
+// Signature: (externref, externref) -> i32
+// Traps if the first argument is not a JSArray.
+transitioning javascript builtin WebAssemblyArrayPush(
+    js-implicit context: NativeContext)(arrayArg: JSAny,
+    elementArg: JSAny): JSAny {
+  try {
+    const array = Cast<JSArray>(arrayArg) otherwise goto IllegalCast;
+
+    // Try fast path for fast JSArrays
+    try {
+      const fastArray = Cast<FastJSArray>(array) otherwise Slow;
+      const kind = EnsureArrayPushable(fastArray.map) otherwise Slow;
+      array::EnsureWriteableFastElements(fastArray);
+
+      if (IsFastSmiElementsKind(kind)) {
+        BuildAppendJSArray(ElementsKind::HOLEY_SMI_ELEMENTS, fastArray,
+            elementArg) otherwise Slow;
+      } else if (IsDoubleElementsKind(kind)) {
+        BuildAppendJSArray(ElementsKind::HOLEY_DOUBLE_ELEMENTS, fastArray,
+            elementArg) otherwise Slow;
+      } else {
+        BuildAppendJSArray(ElementsKind::HOLEY_ELEMENTS, fastArray, elementArg)
+            otherwise Slow;
+      }
+      return fastArray.length;
+    } label Slow {
+      // Slow path: use generic property access
+      const len = GetLengthProperty(array);
+      SetProperty(array, len, elementArg);
+      const newLen = len + 1;
+      SetProperty(array, kLengthString, newLen);
+      return newLen;
+    }
+  } label IllegalCast deferred {
+    Trap(context, MessageTemplate::kWasmTrapIllegalCast);
+  }
+}
