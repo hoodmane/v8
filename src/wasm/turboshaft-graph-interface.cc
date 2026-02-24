@@ -2425,13 +2425,51 @@ class TurboshaftGraphBuildingInterface
       }
 
         // JS Array Builtins.
-        // For now, these fall through to the generic call path (return false).
-        // TODO: Add optimized implementations for js-array builtins.
+      case WKI::kArrayTest: {
+        // Optimized: Check if the value is a JSArray by checking instance type.
+        V<Object> input = args[0].op;
+        Label<Word32> done(&asm_);
+
+        // Handle null/undefined -> return 0.
+        GOTO_IF(__ IsSmi(input), done, __ Word32Constant(0));
+
+        // Check instance type for JS_ARRAY_TYPE.
+        V<Map> map = __ LoadMapField(input);
+        V<Word32> instance_type = __ LoadInstanceTypeField(map);
+        V<Word32> is_array =
+            __ Word32Equal(instance_type, InstanceType::JS_ARRAY_TYPE);
+        GOTO(done, is_array);
+
+        BIND(done, is_array_result);
+        result = is_array_result;
+        decoder->detected_->add_imported_arrays();
+        break;
+      }
+      case WKI::kArrayLength: {
+        // Optimized: Load length from JSArray, trap if not JSArray.
+        V<Object> input = args[0].op;
+
+        // Trap if Smi.
+        __ TrapIf(__ IsSmi(input), TrapId::kTrapIllegalCast);
+
+        // Check instance type.
+        V<Map> map = __ LoadMapField(input);
+        V<Word32> instance_type = __ LoadInstanceTypeField(map);
+        __ TrapIfNot(__ Word32Equal(instance_type, InstanceType::JS_ARRAY_TYPE),
+                     TrapId::kTrapIllegalCast);
+
+        // Load and untag the length (JSArray length is stored as Smi).
+        V<JSArray> array = V<JSArray>::Cast(input);
+        V<Object> length_obj = __ template LoadField<Object>(
+            array, compiler::AccessBuilder::ForJSArrayLength(NO_ELEMENTS));
+        result = __ UntagSmi(V<Smi>::Cast(length_obj));
+        decoder->detected_->add_imported_arrays();
+        break;
+      }
       case WKI::kArrayNew:
-      case WKI::kArrayTest:
-      case WKI::kArrayLength:
       case WKI::kArrayAt:
       case WKI::kArrayPush:
+        // These fall through to the generic call path (call Torque builtins).
         return false;
 
         // Math functions.
